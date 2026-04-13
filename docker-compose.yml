@@ -1,0 +1,72 @@
+services:
+  # ── TimescaleDB ─────────────────────────────────────────────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-tsdbadmin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_DB: ${DB_NAME:-metrics}
+    # Tuned for a 36 GB VM (48 GB host, static allocation). Adjust for your host.
+    command: >
+      postgres
+      -c shared_buffers=8GB
+      -c effective_cache_size=24GB
+      -c work_mem=256MB
+      -c maintenance_work_mem=2GB
+      -c max_wal_size=4GB
+      -c timescaledb.max_background_workers=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_workers=8
+      -c checkpoint_completion_target=0.9
+      -c synchronous_commit=off
+      -c wal_compression=on
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./timescaledb/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Expose on LAN so external tools (DBeaver, psql) can connect
+      - "0.0.0.0:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-tsdbadmin} -d ${DB_NAME:-metrics}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+
+  # ── Grafana ─────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env}
+      GF_SERVER_ROOT_URL: "http://%(domain)s:${GRAFANA_PORT:-3000}/"
+      GF_SERVER_HTTP_PORT: "${GRAFANA_PORT:-3000}"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Pass DB creds through to provisioned datasource
+      DB_USER: ${DB_USER:-tsdbadmin}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      DB_NAME: ${DB_NAME:-metrics}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "0.0.0.0:${GRAFANA_PORT:-3000}:${GRAFANA_PORT:-3000}"
+    networks:
+      - monitoring
+
+volumes:
+  timescaledb_data:
+  grafana_data:
+
+networks:
+  monitoring:
+    driver: bridge
