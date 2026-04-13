@@ -1,0 +1,1568 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_POSTGRESQL",
+      "label": "TimescaleDB",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "grafana-postgresql-datasource",
+      "pluginName": "PostgreSQL"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.1.0"
+    },
+    {
+      "type": "datasource",
+      "id": "grafana-postgresql-datasource",
+      "name": "PostgreSQL",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "${DS_POSTGRESQL}"
+        },
+        "enable": false,
+        "iconColor": "red",
+        "mappings": {
+          "tags": {
+            "source": "field",
+            "value": "value"
+          },
+          "text": {
+            "source": "field",
+            "value": "value_and_details_json"
+          },
+          "time": {
+            "source": "field",
+            "value": "start_time"
+          },
+          "timeEnd": {
+            "source": "field",
+            "value": "end_time"
+          },
+          "title": {
+            "source": "field",
+            "value": "name"
+          }
+        },
+        "name": "Clinical study labels",
+        "target": {
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH fe AS (\n    SELECT ge.id\n    FROM \"GenericEntityService\".\"GenericEntities\" ge\n    INNER JOIN \"SettingsService\". \"Templates\" template on ge.\"templateId\" = template.id        \n    WHERE template.\"name\" = 'clinical_study_session_group' OR template.\"name\" = 'label'\n)\nSELECT \nge.name, \nTO_TIMESTAMP(ge.\"customAttributes\" ->>'start_time', 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') as start_time,\nTO_TIMESTAMP(ge.\"customAttributes\" ->>'end_time', 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') as end_time,\nconcat('value: ', ge.\"customAttributes\"->'value', ', details: ', ge.\"customAttributes\"->'details_json') as value_and_details_json\nFROM \"GenericEntityService\".\"GenericEntities\" ge \nINNER JOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nLEFT JOIN fe on fe.id::text = ge.\"customAttributes\" -> 'session_group' ->> 'id'\nWHERE ge.name in (${PatientLabels:singlequote}) and t.name = 'label'\nAND ge.\"customAttributes\" -> 'label_patient' ->> 'id' = '$Patient'\n\n",
+          "refId": "Anno",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "${DS_POSTGRESQL}"
+        },
+        "enable": false,
+        "iconColor": "orange",
+        "mappings": {
+          "text": {
+            "source": "field",
+            "value": "value_and_details_json"
+          },
+          "time": {
+            "source": "field",
+            "value": "start_time"
+          },
+          "timeEnd": {
+            "source": "field",
+            "value": "end_time"
+          },
+          "title": {
+            "source": "field",
+            "value": "name"
+          }
+        },
+        "name": "Device labels",
+        "target": {
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT ge.name, \n  (LEFT(ge.\"customAttributes\" ->> 'start_time', 23) || 'Z')::timestamp AT TIME ZONE 'UTC' as start_time,\n  (LEFT(ge.\"customAttributes\" ->> 'end_time', 23) || 'Z')::timestamp AT TIME ZONE 'UTC' as end_time,\n-- TO_TIMESTAMP(ge.\"customAttributes\" ->>'start_time', 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') as start_time,\n-- TO_TIMESTAMP(ge.\"customAttributes\" ->>'end_time', 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') as end_time,\n  concat('value: ', ge.\"customAttributes\"->'value', ', details: ', ge.\"customAttributes\"->'details_json') as value_and_details_json\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nINNER JOIN \"SettingsService\".\"Templates\" template on ge.\"templateId\" = template.id        \nWHERE ge.name in (${DeviceLabels:singlequote}) and\ntemplate.\"name\" = 'label' AND (ge.\"customAttributes\"->'label_device'->>'id' in (${PatientsTingoDevice:singlequote}) OR \n                                     ge.\"customAttributes\"->'label_device'->>'id' in (${PatinetCgmDevices:singlequote}))\n                          -- OR ge.\"customAttributes\" -> 'label_patient' ->> 'id' = '$Patient'\n                                     ",
+          "refId": "Anno",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "${DS_POSTGRESQL}"
+        },
+        "enable": false,
+        "iconColor": "red",
+        "mappings": {
+          "text": {
+            "source": "field",
+            "value": "details"
+          },
+          "time": {
+            "source": "field",
+            "value": "start_time"
+          },
+          "timeEnd": {
+            "source": "field",
+            "value": "end_time"
+          },
+          "title": {
+            "source": "field",
+            "value": "sol_name"
+          }
+        },
+        "name": "Dose labels",
+        "target": {
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH dose_solution AS (\n  SELECT ge.id, ge.name\n  FROM \"GenericEntityService\".\"GenericEntities\" ge\n  INNER JOIN \"SettingsService\".\"Templates\" template \n    ON ge.\"templateId\" = template.id        \n  WHERE template.\"name\" = 'dose_solution'\n)\nSELECT   \n  ds.name as sol_name,   \n  (LEFT(ge.\"customAttributes\" ->> 'time', 23) || 'Z')::timestamp AT TIME ZONE 'UTC' as start_time,\n  (LEFT(ge.\"customAttributes\" ->> 'dose_end_time', 23) || 'Z')::timestamp AT TIME ZONE 'UTC' as end_time,\n  concat('device id: ', ge.\"customAttributes\"->'device_dose'->>'id', ', amount (U): ',ge.\"customAttributes\"->'amount', ', rate of injection (U/min): ', ge.\"customAttributes\"->'rate_of_injection') as \"details\"\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nINNER JOIN \"SettingsService\".\"Templates\" template \n  ON ge.\"templateId\" = template.id    \nINNER JOIN dose_solution ds \n  ON ds.id::text = ge.\"customAttributes\"->'dose_label_solution'->>'id'\nWHERE template.\"name\" = 'dose_label' \nAND (ge.\"customAttributes\"->'device_dose'->>'id' IN (${PatientsTingoDevice:singlequote})\n    OR ge.\"customAttributes\"->'device_dose'->>'id' IN (${PatinetCgmDevices:singlequote}))\n  -- and ge.\"customAttributes\"->'patient_dose'->>'id'  = '$Patient'\n",
+          "refId": "Anno",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      },
+      {
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "${DS_POSTGRESQL}"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "mappings": {
+          "text": {
+            "source": "field",
+            "value": "value_and_details_json"
+          },
+          "time": {
+            "source": "field",
+            "value": "start_time"
+          },
+          "timeEnd": {
+            "source": "field",
+            "value": "start_time"
+          },
+          "title": {
+            "source": "field",
+            "value": "name"
+          }
+        },
+        "name": "Session group labels",
+        "target": {
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ge.name, \n  (ge.\"customAttributes\" ->> 'start_time')::timestamptz as start_time,\n  (ge.\"customAttributes\" ->> 'end_time')::timestamptz as end_time,\n  concat(\n    'value: ', ge.\"customAttributes\"->'value', \n    ', details: ', ge.\"customAttributes\"->'details_json'\n  ) as value_and_details_json\nFROM \"GenericEntityService\".\"GenericEntities\" ge \nINNER JOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nWHERE t.name = 'label'\n  AND  ge.\"customAttributes\" -> 'session_group' ->> 'id' = '$session_group_id'",
+          "refId": "Anno",
+          "sql": {
+            "columns": [
+              {
+                "parameters": [],
+                "type": "function"
+              }
+            ],
+            "groupBy": [
+              {
+                "property": {
+                  "type": "string"
+                },
+                "type": "groupBy"
+              }
+            ],
+            "limit": 50
+          }
+        }
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": true,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Jump to CS time",
+      "tooltip": "",
+      "type": "link",
+      "url": "https://bi.app.tingomedical.biot-med.com/d/a2ce7ec0-e748-47c5-9bb7-2cd7886ee491/tingo-device-data?orgId=1&var-Patient=$Patient&theme=light&from=$CS_start_time&to=$CS_end_time"
+    }
+  ],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 14,
+      "panels": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": true,
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "patientId"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 237
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 1
+          },
+          "id": 13,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": []
+          },
+          "pluginVersion": "11.1.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "table",
+              "rawSql": "WITH hw AS (\n  SELECT ge.id, ge.name\n  FROM \"GenericEntityService\".\"GenericEntities\" ge\n  JOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\n  WHERE t.name = 'hw'\n)\nSELECT\n  sess.id,\n  sess.\"deviceId\",\n  hw.name                                            AS hw_id,\n  CASE\n    WHEN sess.state = '0' THEN 'active'\n    WHEN sess.state = '1' THEN 'done'\n    ELSE sess.state\n  END                                                AS state,\n  sess.\"startTime\",\n  sess.\"endTime\",\n  sess.\"customAttributes\"->'current_app_version'     AS app_version,\n  sess.\"customAttributes\"->'current_fw_version'      AS fw_version,\n  sess.summary\nFROM \"DeviceService\".\"SessionsV2\" sess\nLEFT JOIN hw ON hw.id::text = sess.\"customAttributes\"->'hw'->>'id'\nWHERE sess.\"patientId\" = '$Patient'\n  AND (\n       (sess.\"startTime\" >= $__timeFrom() AND sess.\"startTime\" <= $__timeTo())\n    OR (sess.\"endTime\"   >= $__timeFrom() AND sess.\"endTime\"   <= $__timeTo())\n    OR (sess.\"startTime\" <= $__timeFrom() AND (sess.\"endTime\"  >= $__timeTo() OR sess.\"endTime\" IS NULL))\n  )\nORDER BY sess.\"startTime\" DESC",
+              "refId": "A",
+              "hide": false
+            }
+          ],
+          "type": "table",
+          "title": "Sessions Data"
+        }
+      ],
+      "title": "Sessions data",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 7,
+      "panels": [],
+      "title": "Current",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "timescaledb-main"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "(nA)",
+            "axisPlacement": "left",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": 3600000,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": 3600000,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": "/^(G6|LAGA)/"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "mg/dL"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "format": "time_series",
+          "rawSql": "WITH interval_cte AS (\n  SELECT GREATEST(1, FLOOR(\n    EXTRACT(EPOCH FROM ($__timeTo()::timestamptz - $__timeFrom()::timestamptz))\n    / ${w_pixels:raw}\n  ))::int AS interval_seconds\n),\ndevice_label AS (\n  SELECT\n    d.id AS sid,\n    d.id || ' (' || COALESCE(ev.\"customAttributes\"->>'family_name', 'NONE') || ')' AS label\n  FROM \"DeviceService\".\"Devices\" d\n  LEFT JOIN \"GenericEntityService\".\"GenericEntities\" el\n    ON el.id::text = d.\"customAttributes\"->'electrode'->>'id'\n  LEFT JOIN \"GenericEntityService\".\"GenericEntities\" ev\n    ON ev.id::text = el.\"customAttributes\"->'electrode_electrode_version'->>'id'\n  WHERE d.id IN (${PatientsTingoDevice:singlequote})\n)\nSELECT\n  CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), bm.time)\n    ELSE bm.time END                          AS time,\n  AVG(bm.value)                                      AS value,\n  COALESCE(dl.label, bm.sid)                         AS device_ver\nFROM biot_measurements bm\nLEFT JOIN device_label dl ON dl.sid = bm.sid,\ninterval_cte\nWHERE bm.pid = '$Patient'\n  AND bm.sid IN (${PatientsTingoDevice:singlequote})\n  AND bm.measure_name = 'current'\n  AND bm.time BETWEEN $__timeFrom() AND $__timeTo()\n  AND bm.value BETWEEN ${Min_current_view:raw} AND ${Max_current_view:raw}\nGROUP BY\n  CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), bm.time)\n    ELSE bm.time END,\n  COALESCE(dl.label, bm.sid)\nORDER BY time",
+          "refId": "Tingo devices",
+          "hide": false
+        }
+      ],
+      "title": "Current",
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "device_ver",
+            "emptyValue": "empty",
+            "rowField": "time",
+            "valueField": "value"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "time\\device_ver"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 6,
+      "panels": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "(mg/dL)",
+                "axisPlacement": "left",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": 3600000,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": 3600000,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 13
+          },
+          "id": 5,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.1.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "time_series",
+              "rawSql": "WITH interval_cte AS (\n  SELECT GREATEST(1, FLOOR(\n    EXTRACT(EPOCH FROM ($__timeTo()::timestamptz - $__timeFrom()::timestamptz))\n    / ${w_pixels:raw}\n  ))::int AS interval_seconds\n),\ndevice_label AS (\n  SELECT\n    d.id AS sid,\n    d.id || ' (' || COALESCE(ev.\"customAttributes\"->>'family_name', 'NONE') || ')' AS label\n  FROM \"DeviceService\".\"Devices\" d\n  LEFT JOIN \"GenericEntityService\".\"GenericEntities\" el\n    ON el.id::text = d.\"customAttributes\"->'electrode'->>'id'\n  LEFT JOIN \"GenericEntityService\".\"GenericEntities\" ev\n    ON ev.id::text = el.\"customAttributes\"->'electrode_electrode_version'->>'id'\n  WHERE d.id IN (${PatientsTingoDevice:singlequote})\n),\nglucose_sessions AS (\n  SELECT sess.id AS usid, gc.name AS calc_ver\n  FROM \"DeviceService\".\"SessionsV2\" sess\n  JOIN \"SettingsService\".\"Templates\" t  ON t.id  = sess.\"templateId\" AND t.name = 'glucose_measurement'\n  JOIN \"GenericEntityService\".\"GenericEntities\" gc\n    ON gc.id::text = sess.\"customAttributes\"->'glucose_calculation_version'->>'id'\n  JOIN \"SettingsService\".\"Templates\" tgc ON tgc.id = gc.\"templateId\" AND tgc.name = 'glucose_calculation_version'\n  WHERE sess.\"deviceId\" IN (${PatientsTingoDevice:singlequote})\n    AND gc.name IN (${GlucoseCalcVer:singlequote})\n)\nSELECT\n  time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), bm.time) AS time,\n  AVG(bm.value)                                                                             AS value,\n  COALESCE(dl.label, bm.sid)\n    || CASE WHEN gs.calc_ver IS NOT NULL THEN ' [' || gs.calc_ver || ']' ELSE '' END        AS uid_version_combined\nFROM biot_measurements bm\nLEFT JOIN device_label    dl ON dl.sid  = bm.sid\nLEFT JOIN glucose_sessions gs ON gs.usid = bm.usid,\ninterval_cte\nWHERE bm.pid = '$Patient'\n  AND (\n       (bm.sid IN (${PatientsTingoDevice:singlequote}) AND bm.usid IN (SELECT usid FROM glucose_sessions))\n    OR  bm.sid IN (${PatinetCgmDevices:singlequote})\n  )\n  AND bm.measure_name = 'glucose'\n  AND bm.time BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY\n  time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), bm.time),\n  COALESCE(dl.label, bm.sid)\n    || CASE WHEN gs.calc_ver IS NOT NULL THEN ' [' || gs.calc_ver || ']' ELSE '' END\nORDER BY time",
+              "refId": "Tingo devices",
+              "hide": false
+            }
+          ],
+          "title": "Glucose",
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "uid_version_combined",
+                "rowField": "time",
+                "valueField": "value"
+              }
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "destinationType": "time",
+                    "targetField": "time\\uid_version_combined"
+                  }
+                ],
+                "fields": {}
+              }
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": false
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 9,
+            "x": 0,
+            "y": 23
+          },
+          "id": 8,
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true
+          },
+          "pluginVersion": "11.1.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "table",
+              "rawSql": "WITH ref AS (\n  SELECT time_bucket(interval '60 seconds', time) AS time, AVG(value) AS value\n  FROM biot_measurements\n  WHERE pid = '$Patient'\n    AND sid IN (${PatinetCgmDevices:singlequote})\n    AND measure_name = 'glucose'\n    AND time BETWEEN $__timeFrom() AND $__timeTo()\n  GROUP BY 1\n),\ntingo AS (\n  SELECT time_bucket(interval '60 seconds', time) AS time, AVG(value) AS value\n  FROM biot_measurements\n  WHERE pid = '$Patient'\n    AND sid IN (${PatientsTingoDevice:singlequote})\n    AND measure_name = 'glucose'\n    AND time BETWEEN $__timeFrom() AND $__timeTo()\n  GROUP BY 1\n),\njoined AS (\n  SELECT\n    t.time,\n    r.value                                        AS ref_value,\n    t.value                                        AS tingo_value,\n    100 * ABS(t.value - r.value) / NULLIF(r.value, 0) AS ard,\n    CASE\n      WHEN r.value BETWEEN   0 AND  50 THEN '1) 0-50'\n      WHEN r.value BETWEEN  51 AND 100 THEN '2) 51-100'\n      WHEN r.value BETWEEN 101 AND 150 THEN '3) 101-150'\n      WHEN r.value BETWEEN 151 AND 300 THEN '4) 151-300'\n    END AS ref_range\n  FROM tingo t\n  JOIN ref r ON r.time = t.time\n),\nrange_counts AS (\n  SELECT ref_range,\n    COUNT(*)                                        AS total_points,\n    SUM(CASE WHEN ard < 10 THEN 1 ELSE 0 END)      AS points_below_10\n  FROM joined GROUP BY ref_range\n)\nSELECT\n  ref_range                                         AS \"Glucose range (mg/dL)\",\n  points_below_10 * 100.0 / NULLIF(total_points, 0) AS \"ARD < 10 (%)\"\nFROM range_counts\nORDER BY ref_range",
+              "refId": "A",
+              "hide": false
+            }
+          ],
+          "title": "Tingo Performance ",
+          "type": "table"
+        }
+      ],
+      "title": "Glucose view",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 16,
+      "panels": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "(\u00b0C)",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": 3600000,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": 3600000,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 14
+          },
+          "id": 15,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "time_series",
+              "rawSql": "SELECT time, value, sid || '-' || measure_name AS sid_measure\nFROM biot_measurements\nWHERE pid = '$Patient'\n  AND sid IN (${PatientsTingoDevice:singlequote})\n  AND measure_name = 'temperature'\n  AND time BETWEEN $__timeFrom() AND $__timeTo()\nORDER BY time",
+              "refId": "A",
+              "hide": false
+            }
+          ],
+          "title": "AFE temperature",
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "sid_measure",
+                "rowField": "time",
+                "valueField": "value"
+              }
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "destinationType": "time",
+                    "targetField": "time\\sid_measure"
+                  }
+                ],
+                "fields": {}
+              }
+            }
+          ],
+          "type": "timeseries"
+        }
+      ],
+      "title": "Temperature",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "id": 4,
+      "panels": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "(nA)",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "points",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/.*cv_voltage/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisLabel",
+                    "value": "(mV)"
+                  }
+                ]
+              },
+              {
+                "__systemRef": "hideSeriesFrom",
+                "matcher": {
+                  "id": "byNames",
+                  "options": {
+                    "mode": "exclude",
+                    "names": [
+                      "dZZZ0351-cv_voltage"
+                    ],
+                    "prefix": "All except:",
+                    "readOnly": true
+                  }
+                },
+                "properties": [
+                  {
+                    "id": "custom.hideFrom",
+                    "value": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 46
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "time_series",
+              "rawSql": "WITH interval_cte AS (\n  SELECT GREATEST(1, FLOOR(\n    EXTRACT(EPOCH FROM ($__timeTo()::timestamptz - $__timeFrom()::timestamptz))\n    / ${w_pixels:raw}\n  ))::int AS interval_seconds\n)\nSELECT\n  CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), time)\n    ELSE time END                             AS time,\n  AVG(value)                                         AS value,\n  sid || '-' || measure_name                         AS device_measure\nFROM biot_measurements, interval_cte\nWHERE pid = '$Patient'\n  AND sid IN (${PatientsTingoDevice:singlequote})\n  AND measure_name IN ('cv_current', 'cv_voltage')\n  AND time BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), time)\n    ELSE time END, sid || '-' || measure_name\nORDER BY time",
+              "refId": "Current",
+              "hide": false
+            }
+          ],
+          "title": "CV",
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "device_measure",
+                "rowField": "time",
+                "valueField": "value"
+              }
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "destinationType": "time",
+                    "targetField": "time\\device_measure"
+                  }
+                ],
+                "fields": {}
+              }
+            }
+          ],
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "(nA)",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "points",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/.*pert_voltage/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisLabel",
+                    "value": "(mV)"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 54
+          },
+          "id": 12,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "time_series",
+              "rawSql": "WITH interval_cte AS (\n  SELECT GREATEST(1, FLOOR(\n    EXTRACT(EPOCH FROM ($__timeTo()::timestamptz - $__timeFrom()::timestamptz))\n    / ${w_pixels:raw}\n  ))::int AS interval_seconds\n)\nSELECT\n  CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), time)\n    ELSE time END                             AS time,\n  AVG(value)                                         AS value,\n  sid || '-' || measure_name                         AS device_measure\nFROM biot_measurements, interval_cte\nWHERE pid = '$Patient'\n  AND sid IN (${PatientsTingoDevice:singlequote})\n  AND measure_name IN ('pert_current', 'pert_voltage')\n  AND time BETWEEN $__timeFrom() AND $__timeTo()\nGROUP BY CASE WHEN '${Binning}' = 'Yes'\n    THEN time_bucket(make_interval(secs => (SELECT interval_seconds FROM interval_cte)), time)\n    ELSE time END, sid || '-' || measure_name\nORDER BY time",
+              "refId": "Current",
+              "hide": false
+            }
+          ],
+          "title": "Step",
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "device_measure",
+                "rowField": "time",
+                "valueField": "value"
+              }
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "destinationType": "time",
+                    "targetField": "time\\device_measure"
+                  }
+                ],
+                "fields": {}
+              }
+            }
+          ],
+          "type": "timeseries"
+        }
+      ],
+      "title": "Perturbation",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 15
+      },
+      "id": 10,
+      "panels": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "timescaledb-main"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "Mobile Battery (%)",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": 3600000,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": 3600000,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "/.*tingo_device_battery/"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisLabel",
+                    "value": "Tingo battery (mV)"
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 16
+          },
+          "id": 9,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "grafana-postgresql-datasource",
+                "uid": "timescaledb-main"
+              },
+              "format": "time_series",
+              "rawSql": "SELECT time, value, sid || '-' || measure_name AS sid_measure\nFROM biot_measurements\nWHERE pid = '$Patient'\n  AND sid IN (${PatientsTingoDevice:singlequote})\n  AND measure_name IN ('mobile_battery', 'tingo_device_battery')\n  AND time BETWEEN $__timeFrom() AND $__timeTo()\nORDER BY time",
+              "refId": "A",
+              "hide": false
+            }
+          ],
+          "title": "Tingo & Mobile Battery",
+          "transformations": [
+            {
+              "id": "groupingToMatrix",
+              "options": {
+                "columnField": "sid_measure",
+                "rowField": "time",
+                "valueField": "value"
+              }
+            },
+            {
+              "id": "convertFieldType",
+              "options": {
+                "conversions": [
+                  {
+                    "destinationType": "time",
+                    "targetField": "time\\sid_measure"
+                  }
+                ],
+                "fields": {}
+              }
+            }
+          ],
+          "type": "timeseries"
+        }
+      ],
+      "title": "Battery",
+      "type": "row"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "c7205105-2a8b-4af4-a06a-1f6f0fad5da8",
+          "value": "c7205105-2a8b-4af4-a06a-1f6f0fad5da8"
+        },
+        "hide": 0,
+        "name": "Patient",
+        "options": [
+          {
+            "selected": true,
+            "text": "c7205105-2a8b-4af4-a06a-1f6f0fad5da8",
+            "value": "c7205105-2a8b-4af4-a06a-1f6f0fad5da8"
+          }
+        ],
+        "query": "c7205105-2a8b-4af4-a06a-1f6f0fad5da8",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT sess.\"deviceId\"\nFROM \"SessionsV2\" sess\nJOIN \"Devices\" d ON sess.\"deviceId\" = d.id\nJOIN \"Templates\" t ON d.\"templateId\" = t.id\nWHERE sess.\"patientId\" = '$Patient'\nAND t.name = 'tingo_device'\nAND (\n      (sess.\"startTime\" >=$__timeFrom() AND sess.\"startTime\" <=$__timeTo()) \n      OR \n      (sess.\"endTime\" >=$__timeFrom() AND sess.\"endTime\" <=$__timeTo())\n      OR \n      (sess.\"startTime\" <=$__timeFrom() AND (sess.\"endTime\" >=$__timeTo() OR sess.\"endTime\" IS NULL))\n      OR \n      (sess.\"startTime\" >=$__timeFrom() AND sess.\"endTime\" <=$__timeTo())\n      --  OR sess.\"endTime\" IS NULL\n    )\nGROUP BY sess.\"deviceId\"",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Patient's Tingo Devices",
+        "multi": true,
+        "name": "PatientsTingoDevice",
+        "options": [],
+        "query": "SELECT sess.\"deviceId\"\nFROM \"DeviceService\".\"SessionsV2\" sess\nJOIN \"DeviceService\".\"Devices\" d ON sess.\"deviceId\" = d.id\nJOIN \"SettingsService\".\"Templates\" t ON d.\"templateId\" = t.id\nWHERE sess.\"patientId\" = '$Patient'\n  AND t.name = 'tingo_device'\n  AND (\n    (sess.\"startTime\" >= $__timeFrom() AND sess.\"startTime\" <= $__timeTo())\n    OR (sess.\"endTime\"   >= $__timeFrom() AND sess.\"endTime\"   <= $__timeTo())\n    OR (sess.\"startTime\" <= $__timeFrom() AND (sess.\"endTime\" >= $__timeTo() OR sess.\"endTime\" IS NULL))\n    OR (sess.\"startTime\" >= $__timeFrom() AND sess.\"endTime\"   <= $__timeTo())\n  )\nGROUP BY sess.\"deviceId\"",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT s.\"deviceId\" FROM \"SessionsV2\" s\nJOIN \"Devices\" d ON s.\"deviceId\" = d.id\nJOIN \"Templates\" t ON d.\"templateId\" = t.id\nWHERE s.\"patientId\" = '$Patient'\nAND t.name = 'external_bgm'\nGROUP BY s.\"deviceId\"",
+        "description": "",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Patinet's CGM Devices",
+        "multi": true,
+        "name": "PatinetCgmDevices",
+        "options": [],
+        "query": "SELECT sess.\"deviceId\"\nFROM \"DeviceService\".\"SessionsV2\" sess\nJOIN \"DeviceService\".\"Devices\" d ON sess.\"deviceId\" = d.id\nJOIN \"SettingsService\".\"Templates\" t ON d.\"templateId\" = t.id\nWHERE sess.\"patientId\" = '$Patient'\n  AND t.name != 'tingo_device'\n  AND (\n    (sess.\"startTime\" >= $__timeFrom() AND sess.\"startTime\" <= $__timeTo())\n    OR (sess.\"endTime\"   >= $__timeFrom() AND sess.\"endTime\"   <= $__timeTo())\n    OR (sess.\"startTime\" <= $__timeFrom() AND (sess.\"endTime\" >= $__timeTo() OR sess.\"endTime\" IS NULL))\n    OR (sess.\"startTime\" >= $__timeFrom() AND sess.\"endTime\"   <= $__timeTo())\n  )\nGROUP BY sess.\"deviceId\"",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "400",
+          "value": "400"
+        },
+        "hide": 0,
+        "name": "Max_current_view",
+        "options": [
+          {
+            "selected": true,
+            "text": "400",
+            "value": "400"
+          }
+        ],
+        "query": "400",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "-400",
+          "value": "-400"
+        },
+        "hide": 0,
+        "name": "Min_current_view",
+        "options": [
+          {
+            "selected": true,
+            "text": "-400",
+            "value": "-400"
+          }
+        ],
+        "query": "-400",
+        "skipUrlSync": false,
+        "type": "textbox"
+      },
+      {
+        "hide": 2,
+        "name": "w_pixels",
+        "query": "${VAR_W_PIXELS}",
+        "skipUrlSync": false,
+        "type": "constant",
+        "current": {
+          "value": "${VAR_W_PIXELS}",
+          "text": "${VAR_W_PIXELS}",
+          "selected": false
+        },
+        "options": [
+          {
+            "value": "${VAR_W_PIXELS}",
+            "text": "${VAR_W_PIXELS}",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "Yes",
+          "value": "Yes"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "Binning",
+        "options": [
+          {
+            "selected": true,
+            "text": "Yes",
+            "value": "Yes"
+          },
+          {
+            "selected": false,
+            "text": "No",
+            "value": "No"
+          }
+        ],
+        "query": "Yes, No",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT ge.name --ge.\"customAttributes\"->'patient'->>'id' as patient_id\nFROM \"GenericEntities\" ge\nINNER JOIN \"Templates\" ON ge.\"templateId\" = \"Templates\".\"id\" \nWHERE \"Templates\".\"name\" = 'clinical_study_session_group'\nand ge.\"customAttributes\"->'patient'->>'id' = '$Patient'",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "CS",
+        "options": [],
+        "query": "SELECT ge.name\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nJOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nWHERE t.name = 'clinical_study_session_group'\n  AND ge.\"customAttributes\"->'patient'->>'id' = '$Patient'\nORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT \n    TO_TIMESTAMP((ge.\"customAttributes\"->>'clinical_study_date_time_start')::text, 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') AS start_time\nFROM \"GenericEntities\" ge\nINNER JOIN \"Templates\" ON ge.\"templateId\" = \"Templates\".\"id\" \nWHERE \"Templates\".\"name\" = 'clinical_study_session_group'\n  AND ge.\"customAttributes\"->'patient'->>'id' = '$Patient'\n  AND ge.name = '$CS';",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "CS_start_time",
+        "options": [],
+        "query": "SELECT TO_TIMESTAMP(\n  ge.\"customAttributes\"->>'clinical_study_date_time_start',\n  'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ'\n) AS start_time\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nJOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nWHERE t.name = 'clinical_study_session_group'\n  AND ge.\"customAttributes\"->'patient'->>'id' = '$Patient'\n  AND ge.name = '$CS'",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT \n    TO_TIMESTAMP((ge.\"customAttributes\"->>'clinical_study_date_time_end')::text, 'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ') AS end_time\nFROM \"GenericEntities\" ge\nINNER JOIN \"Templates\" ON ge.\"templateId\" = \"Templates\".\"id\" \nWHERE \"Templates\".\"name\" = 'clinical_study_session_group'\n  AND ge.\"customAttributes\"->'patient'->>'id' = '$Patient'\n  AND ge.name = '$CS';",
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "name": "CS_end_time",
+        "options": [],
+        "query": "SELECT TO_TIMESTAMP(\n  ge.\"customAttributes\"->>'clinical_study_date_time_end',\n  'YYYY-MM-DD\"T\"HH24:MI:SS.MSZ'\n) AS end_time\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nJOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nWHERE t.name = 'clinical_study_session_group'\n  AND ge.\"customAttributes\"->'patient'->>'id' = '$Patient'\n  AND ge.name = '$CS'",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "SELECT ge.name\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nINNER JOIN \"SettingsService\".\"Templates\" template ON ge.\"templateId\" = template.id        \nWHERE template.\"name\" = 'label'\nAND (\n    ge.\"customAttributes\"->'label_device'->>'id' IN (${PatientsTingoDevice:singlequote})\n    OR\n    ge.\"customAttributes\"->'label_device'->>'id' IN (\n        ${PatinetCgmDevices:singlequote:csv}'__DUMMY__'\n    )\n)",
+        "error": {},
+        "hide": 0,
+        "includeAll": true,
+        "label": "Device Labels",
+        "multi": true,
+        "name": "DeviceLabels",
+        "options": [],
+        "query": "SELECT ge.name\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nJOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nWHERE t.name = 'label'\n  AND (\n    ge.\"customAttributes\"->'label_device'->>'id' IN (${PatientsTingoDevice:singlequote})\n    OR ge.\"customAttributes\"->'label_device'->>'id' IN (${PatinetCgmDevices:singlequote})\n  )\nORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "WITH fe AS (\n    SELECT ge.id\n    FROM \"GenericEntityService\".\"GenericEntities\" ge\n    INNER JOIN \"SettingsService\". \"Templates\" template on ge.\"templateId\" = template.id        \n    WHERE template.\"name\" = 'clinical_study_session_group' OR template.\"name\" = 'label'\n)\nSELECT \nge.name\nFROM \"GenericEntityService\".\"GenericEntities\" ge \nINNER JOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nLEFT JOIN fe on fe.id::text = ge.\"customAttributes\" -> 'session_group' ->> 'id'\nWHERE t.name = 'label'\nAND ge.\"customAttributes\" -> 'label_patient' ->> 'id' = '$Patient'\n\n",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Patient's Labels",
+        "multi": true,
+        "name": "PatientLabels",
+        "options": [],
+        "query": "WITH study_groups AS (\n  SELECT ge.id\n  FROM \"GenericEntityService\".\"GenericEntities\" ge\n  JOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\n  WHERE t.name IN ('clinical_study_session_group', 'label')\n)\nSELECT ge.name\nFROM \"GenericEntityService\".\"GenericEntities\" ge\nJOIN \"SettingsService\".\"Templates\" t ON ge.\"templateId\" = t.id\nLEFT JOIN study_groups sg ON sg.id::text = ge.\"customAttributes\"->'session_group'->>'id'\nWHERE t.name = 'label'\n  AND ge.\"customAttributes\"->'label_patient'->>'id' = '$Patient'\nORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "timescaledb-main"
+        },
+        "definition": "WITH glucose_calc AS (\n  SELECT \n    ge.id AS gid, \n    ge.name, \n    ge.\"customAttributes\"->'calculation_version_description' AS calculation_version_description\n  FROM \n    \"GenericEntities\" ge\n    INNER JOIN \"Templates\" ON \"Templates\".\"id\" = ge.\"templateId\"\n  WHERE \n    \"Templates\".\"name\" = 'glucose_calculation_version'\n),\nreal_data AS (\n  SELECT  \n    glucose_calc.name AS gname\n  FROM \n    \"SessionsV2\" sess\n  INNER JOIN \n    \"Templates\" ON \"Templates\".\"id\" = sess.\"templateId\"\n  INNER JOIN \n    glucose_calc ON glucose_calc.gid::text = sess.\"customAttributes\"->'glucose_calculation_version'->>'id'\n  WHERE \n    sess.\"deviceId\" IN (${PatientsTingoDevice:singlequote})\n    AND \"Templates\".\"name\" = 'glucose_measurement'\n),\ndummy_row AS (\n  SELECT \n    'None' AS gname\n)\n-- Combine the real data with the dummy row\nSELECT gname\nFROM real_data\n\nUNION ALL\n\nSELECT gname\nFROM dummy_row\nWHERE NOT EXISTS (\n  SELECT 1\n  FROM real_data\n);",
+        "error": {},
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "GlucoseCalcVer",
+        "options": [],
+        "query": "WITH glucose_calc AS (\n  SELECT ge.id AS gid, ge.name\n  FROM \"GenericEntityService\".\"GenericEntities\" ge\n  JOIN \"SettingsService\".\"Templates\" t ON t.id = ge.\"templateId\" AND t.name = 'glucose_calculation_version'\n),\ntingo_sids AS (\n  SELECT sess.\"deviceId\" AS sid\n  FROM \"DeviceService\".\"SessionsV2\" sess\n  JOIN \"DeviceService\".\"Devices\" d ON sess.\"deviceId\" = d.id\n  JOIN \"SettingsService\".\"Templates\" t ON d.\"templateId\" = t.id\n  WHERE sess.\"patientId\" = '$Patient'\n    AND t.name = 'tingo_device'\n),\nreal_data AS (\n  SELECT DISTINCT gc.name AS gname\n  FROM \"DeviceService\".\"SessionsV2\" sess\n  JOIN \"SettingsService\".\"Templates\" t ON t.id = sess.\"templateId\" AND t.name = 'glucose_measurement'\n  JOIN glucose_calc gc ON gc.gid::text = sess.\"customAttributes\"->'glucose_calculation_version'->>'id'\n  WHERE sess.\"deviceId\" IN (SELECT sid FROM tingo_sids)\n)\nSELECT gname FROM real_data\nUNION ALL\nSELECT 'None' WHERE NOT EXISTS (SELECT 1 FROM real_data)\nORDER BY 1",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Tingo Device Data (Local)",
+  "uid": "tingo-device-local",
+  "version": 127,
+  "weekStart": ""
+}
